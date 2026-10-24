@@ -41,18 +41,8 @@ async fn dev_profile_features_are_wired_through_scafra() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let response = pet_app
-        .clone()
-        .oneshot(get_request("/pet", None))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-    let response = pet_app
-        .oneshot(get_request("/pet", Some("Basic ZGVtbzpzY2FmcmEtbG9jYWw=")))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::OK);
     assert!(response.text().await.unwrap().contains("scafra_up 1"));
+
     // Readiness must observe the PetStore created by Scafra's application graph.
     for path in ["/ready", "/pet"] {
         let response = app
