@@ -1,8 +1,9 @@
 # Scafra Petstore test service
 
 A complete in-memory Petstore API used to exercise Scafra from a separate
-repository. Scafra dependencies are pinned to a Git revision, so a fresh clone
-fetches the required framework without requiring another repository beside it.
+repository. Scafra dependencies use the GitHub `main` branch, with the resolved
+commit recorded in `Cargo.lock`. Run `cargo update -p scafra -p scafra-bootui`
+to fetch the latest commit from `main`.
 
 When developing against a sibling Scafra checkout at `../ember`, use the
 helper to build, run, or test against those local crates:

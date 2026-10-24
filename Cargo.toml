@@ -7,11 +7,12 @@ publish = false
 [dependencies]
 scafra = {
     git = "https://github.com/Scafra/Scafra",
-    rev = "c7f9dd227eb98e02b0882d6264259911956dd7f5",
+    branch = "main",
+    features = ["standard", "bootui"],
 }
 scafra-bootui = {
     git = "https://github.com/Scafra/Scafra",
-    rev = "c7f9dd227eb98e02b0882d6264259911956dd7f5",
+    branch = "main",
 }
 serde = { version = "1", features = ["derive"] }
 tracing = "0.1"

@@ -5,7 +5,7 @@ project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 scafra_root=${SCAFRA_CHECKOUT:-"$project_root/../ember"}
 scafra_root=$(CDPATH= cd -- "$scafra_root" 2>/dev/null && pwd) || {
     echo "Local Scafra checkout not found at '$scafra_root'." >&2
-    echo "Use plain cargo commands for the pinned Scafra Git dependency." >&2
+    echo "Use plain cargo commands for the Scafra Git dependency on main." >&2
     exit 2
 }
 

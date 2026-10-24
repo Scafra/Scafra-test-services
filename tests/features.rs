@@ -94,7 +94,15 @@ async fn dev_profile_features_are_wired_through_scafra() {
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
-    let dashboard = scafra_bootui::layer(Router::new(), &config.bootui);
+    // BootUI requires the peer address to verify that the request is local.
+    let dashboard = scafra_bootui::try_layer_with_config_and_profile(Router::new(), &config, "dev")
+        .expect("BootUI should accept the dev configuration")
+        .layer(scafra::web::axum::Extension(
+            scafra::web::axum::extract::ConnectInfo(std::net::SocketAddr::from((
+                [127, 0, 0, 1],
+                12345,
+            ))),
+        ));
     let response = dashboard
         .clone()
         .oneshot(get_request("/bootui", None))
@@ -113,8 +121,10 @@ async fn dev_profile_features_are_wired_through_scafra() {
     assert_eq!(response.status(), StatusCode::OK);
     let body = to_bytes(response.into_body(), 4096).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
-    assert!(body.contains("\"actuator\""), "{body}");
     assert!(body.contains("\"server\""), "{body}");
+    assert!(body.contains("\"port\":8081"), "{body}");
+    assert!(body.contains("\"profile\":\"dev\""), "{body}");
+    assert!(!body.contains("scafra-local"), "{body}");
 }
 
 fn get_request(path: &str, authorization: Option<&str>) -> Request<Body> {
