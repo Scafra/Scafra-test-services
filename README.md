@@ -35,6 +35,10 @@ Environment variables such as
 Application code is organized below `src/main/`, with controllers, services,
 jobs, and models in their respective subdirectories.
 
+Run the tests with `cargo test`. Integration tests start the application binary
+through Scafra on temporary local ports and exercise it over HTTP. Each test
+stops its service process when it finishes.
+
 The service also contains a scheduler example in
 `src/main/jobs/pet_maintenance.rs`. It logs a maintenance heartbeat every 30
 seconds by default, or every 5 seconds with `SCAFRA_PROFILE=dev`.

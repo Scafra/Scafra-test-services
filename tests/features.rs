@@ -1,14 +1,9 @@
+mod common;
+
 use std::path::PathBuf;
 
-use scafra::web::{
-    axum::{
-        body::{to_bytes, Body},
-        http::{Request, StatusCode},
-        Router,
-    },
-    tower::util::ServiceExt,
-};
-use scafra_test_service as _;
+use common::TestService;
+use reqwest::{Method, StatusCode};
 
 fn dev_config() -> scafra::config::ScafraConfig {
     scafra::ConfigLoader::new()
@@ -33,52 +28,16 @@ async fn dev_profile_features_are_wired_through_scafra() {
     assert!(config.actuator.is_enabled("metrics"));
     assert_eq!(config.actuator.health.checks, ["pet-store".to_owned()]);
 
-    let app =
-        scafra::web::build_router_with_actuator_and_security(&config.actuator, &config.security)
-            .expect("actuator router should build");
+    let app = TestService::start("dev", true).await;
+    for path in ["/metrics", "/pet"] {
+        let response = app.request(Method::GET, path).send().await.unwrap();
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+    }
 
     let response = app
-        .clone()
-        .oneshot(get_request("/metrics", None))
-        .await
-        .unwrap();
-    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
-
-    let response = app
-        .clone()
-        .oneshot(get_request(
-            "/metrics",
-            Some("Basic ZGVtbzpzY2FmcmEtbG9jYWw="),
-        ))
-        .await
-        .unwrap();
-    let status = response.status();
-    let body = to_bytes(response.into_body(), 1024).await.unwrap();
-    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&body));
-    assert!(body
-        .windows(b"scafra_up 1".len())
-        .any(|window| window == b"scafra_up 1"));
-
-    let response = app
-        .oneshot(get_request(
-            "/ready",
-            Some("Basic ZGVtbzpzY2FmcmEtbG9jYWw="),
-        ))
-        .await
-        .unwrap();
-    let status = response.status();
-    let body = to_bytes(response.into_body(), 1024).await.unwrap();
-    assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
-    assert!(body.windows(b"DOWN".len()).any(|window| window == b"DOWN"));
-
-    let pet_app = scafra_test_service::build_petstore_router(&config)
-        .expect("secured Pet API router should build");
-    let response = pet_app
-        .clone()
-        .oneshot(get_request(
-            "/ready",
-            Some("Basic ZGVtbzpzY2FmcmEtbG9jYWw="),
-        ))
+        .request(Method::GET, "/metrics")
+        .basic_auth("demo", Some("scafra-local"))
+        .send()
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
@@ -93,44 +52,27 @@ async fn dev_profile_features_are_wired_through_scafra() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+    assert!(response.text().await.unwrap().contains("scafra_up 1"));
+    // Readiness must observe the PetStore created by Scafra's application graph.
+    for path in ["/ready", "/pet"] {
+        let response = app
+            .request(Method::GET, path)
+            .basic_auth("demo", Some("scafra-local"))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 
-    // BootUI requires the peer address to verify that the request is local.
-    let dashboard = scafra_bootui::try_layer_with_config_and_profile(Router::new(), &config, "dev")
-        .expect("BootUI should accept the dev configuration")
-        .layer(scafra::web::axum::Extension(
-            scafra::web::axum::extract::ConnectInfo(std::net::SocketAddr::from((
-                [127, 0, 0, 1],
-                12345,
-            ))),
-        ));
-    let response = dashboard
-        .clone()
-        .oneshot(get_request("/bootui", None))
-        .await
-        .unwrap();
+    let response = app.dashboard("").send().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), 4096).await.unwrap();
-    assert!(body
-        .windows(b"Scafra BootUI".len())
-        .any(|window| window == b"Scafra BootUI"));
+    assert!(response.text().await.unwrap().contains("Scafra BootUI"));
 
-    let response = dashboard
-        .oneshot(get_request("/bootui/api/config", None))
-        .await
-        .unwrap();
+    let response = app.dashboard("/api/config").send().await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let body = to_bytes(response.into_body(), 4096).await.unwrap();
-    let body = String::from_utf8(body.to_vec()).unwrap();
-    assert!(body.contains("\"server\""), "{body}");
-    assert!(body.contains("\"port\":8081"), "{body}");
+    let body = response.text().await.unwrap();
+    let port = app.base_url.rsplit(':').next().unwrap();
+    assert!(body.contains(&format!("\"port\":{port}")), "{body}");
     assert!(body.contains("\"profile\":\"dev\""), "{body}");
     assert!(!body.contains("scafra-local"), "{body}");
-}
-
-fn get_request(path: &str, authorization: Option<&str>) -> Request<Body> {
-    let mut request = Request::get(path);
-    if let Some(value) = authorization {
-        request = request.header("authorization", value);
-    }
-    request.body(Body::empty()).unwrap()
 }
